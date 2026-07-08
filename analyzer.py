@@ -1,4 +1,5 @@
 import re
+import sys
 
 log_pattern = r'(?P<ip>\S+) - - \[(?P<time>.*?)\] "(?P<method>\S+) (?P<path>\S+) \S+" (?P<status>\d+) \d+'
 
@@ -13,13 +14,25 @@ def parse_log_line(line):
         return None
 
 
-if __name__ == "__main__":
-    test_line = '203.0.113.42 - - [01/Jun/2026:09:14:22 +0000] "GET /products/1877 HTTP/1.1" 200 5324 "-" "Mozilla/5.0 ..."'
-    result = parse_log_line(test_line)
+def procces_log_file(file_path):
 
-    if result:
-        print(f"IP: {result['ip']}")
-        print(f"Path: {result['path']}")
-        print(f"Status: {result['status']}")
+    try:
+        with open(file_path , "r") as file:
+            for log in file:
+                result = parse_log_line(log.strip())
+
+                if result:
+                    print(f"ip : {result["ip"]} time : {result["time"]} , method : {result["method"]} ,path : {result["path"]} , status : {result["status"]}")
+                else:
+                    print("Malformed line")
+    except FileNotFoundError:
+        print("file not founded!")
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print(f"python analyzer.py <path_log_file>")
     else:
-        print("*-*")
+        log_file = sys.argv[1]
+        procces_log_file(log_file)

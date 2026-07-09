@@ -17,11 +17,18 @@ def parse_log_line(log):
     else:
         return None
 
+def extract_hour(time):
+    try :
+        hour = time.split(":")[1]
+        return hour
+    except (AttributeError , IndexError):
+        return None
 
 
 def process_log_file(file_path):
     unique_ips = set()
     endpoint_counts = Counter()
+    hour_counts = Counter()
     error_count = 0
     total_requests = 0
     malformed_logs = 0
@@ -29,17 +36,27 @@ def process_log_file(file_path):
     try:
         with open(file_path , "r") as file:
             for log in file:
-                result = parse_log_line(log.strip())
+
+                log = log.strip()
+                if not log:
+                    continue
+
+                result = parse_log_line(log)
 
                 if result:
+
                     endpoint_counts[result["path"]] += 1
                     unique_ips.add(result["ip"])
                     total_requests += 1
 
                     status_code = int(result["status"])
-
                     if 400 <= status_code < 600:
                         error_count += 1
+
+                    hour = extract_hour(result["time"])
+                    if hour is not None:
+                        hour_counts[hour] += 1
+
                 else:
                     malformed_logs += 1
         
@@ -49,6 +66,7 @@ def process_log_file(file_path):
             "unique_ips": unique_ips,
             "endpoint_counts": endpoint_counts,
             "error_count": error_count,
+            "hour_counts" : dict(sorted(hour_counts.items()))
         }
 
 
@@ -82,6 +100,43 @@ def print_report(report):
 
     print(f"Error rate : {error_rate:.2f}%")
 
+    print("-" * 40)
+
+    hours = report["hour_counts"]
+
+    start_hour = min(int(hour) for hour in hours)
+    end_hour = max(int(hour) for hour in hours)
+    max_count = max(hours.values())
+    max_bar_width = 32
+
+    print(f"Hours present in log: {start_hour:02d} to {end_hour:02d}")
+    print("Time distribution (scaled):")
+    print("Hour Range  |            Histogram             |    Count |   Peak")
+    print("-" * 75)
+
+    for hour in range(start_hour, end_hour + 1):
+        hour_str = f"{hour:02d}"
+        count = hours.get(hour_str, 0)
+        next_hour = (hour + 1) % 24
+
+        if max_count > 0:
+            bar_length = int((count / max_count) * max_bar_width)
+        else:
+            bar_length = 0
+
+        if count > 0 and bar_length == 0:
+            bar_length = 1
+
+        bar = "■" * bar_length
+        percent = (count / max_count) * 100 if max_count > 0 else 0
+
+        print(
+            f"{hour_str}:00-{next_hour:02d}:00 | "
+            f"{bar:<32} | "
+            f"{count:>8} | "
+            f"{percent:>6.1f}%"
+        )
+        
 
 
 def main():

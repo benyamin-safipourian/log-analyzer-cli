@@ -29,6 +29,7 @@ def process_log_file(file_path):
     unique_ips = set()
     endpoint_counts = Counter()
     hour_counts = Counter()
+    suspicious_login_failures = Counter()
     error_count = 0
     total_requests = 0
     malformed_logs = 0
@@ -53,6 +54,13 @@ def process_log_file(file_path):
                     if 400 <= status_code < 600:
                         error_count += 1
 
+                    if (
+                        status_code == 401 
+                        and "login" in result["path"].lower()
+                        and result["method"] == "POST"
+                    ):
+                        suspicious_login_failures[result["ip"]] += 1
+
                     hour = extract_hour(result["time"])
                     if hour is not None:
                         hour_counts[hour] += 1
@@ -66,7 +74,8 @@ def process_log_file(file_path):
             "unique_ips": unique_ips,
             "endpoint_counts": endpoint_counts,
             "error_count": error_count,
-            "hour_counts" : dict(sorted(hour_counts.items()))
+            "hour_counts" : dict(sorted(hour_counts.items())),
+            "suspicious_login_failures": suspicious_login_failures
         }
 
 
@@ -86,9 +95,11 @@ def print_report(report):
         print("No endpoints found.")
 
     print("-" * 40)
+    print("\n")
     print(f"total requests : {report['total_requests']}")
     print(f"malformed logs : {report['malformed_logs']}")
     print(f"Unique IPs: {len(report['unique_ips'])}")
+    print("\n")
     print("-" * 40)
 
 
@@ -98,7 +109,26 @@ def print_report(report):
     else:
         error_rate = 0
 
-    print(f"Error rate : {error_rate:.2f}%")
+    print(f"\nError rate : {error_rate:.2f}%\n")
+
+    print("-" * 40)
+
+
+    print("\nSuspicious login activity:")
+
+    threshold = 20
+    suspicious_ips = {
+        ip: count
+        for ip, count in report["suspicious_login_failures"].items()
+        if count >= threshold
+    }
+
+    if suspicious_ips:
+        for ip, count in sorted(suspicious_ips.items(), key=lambda item: item[1], reverse=True):
+            print(f"- {ip}: {count} failed login attempts (POST /login + 401)")
+    else:
+        print(f"No suspicious login activity found. Threshold: {threshold}\n")
+
 
     print("-" * 40)
 
@@ -113,7 +143,7 @@ def print_report(report):
     max_count = max(hours.values())
     max_bar_width = 32
 
-    print(f"Hours present in log: {start_hour:02d} to {end_hour:02d}")
+    print(f"\nHours present in log: {start_hour:02d} to {end_hour:02d}")
     print("Time distribution (scaled):")
     print("Hour Range  |            Histogram             |    Count |   Peak")
     print("-" * 75)

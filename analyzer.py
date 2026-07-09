@@ -103,6 +103,10 @@ def print_report(report):
     print("-" * 40)
 
     hours = report["hour_counts"]
+    
+    if not hours:
+        print("Time distribution: no valid hours found.")
+        return
 
     start_hour = min(int(hour) for hour in hours)
     end_hour = max(int(hour) for hour in hours)

@@ -1,6 +1,8 @@
 import re
 import sys
 from collections import Counter
+import time
+import gzip
 
 # log_pattern = r'(?P<ip>\S+) - - \[(?P<time>.*?)\] "(?P<method>\S+) (?P<path>\S+) \S+" (?P<status>\d+) \d+'
 
@@ -24,6 +26,11 @@ def extract_hour(time):
     except (AttributeError , IndexError):
         return None
 
+def open_log_file(file_path):
+    if file_path.endswith('.gz'):
+        return gzip.open(file_path, 'rt', encoding='utf-8')
+    return open(file_path, 'r', encoding='utf-8')
+
 
 def process_log_file(file_path):
     unique_ips = set()
@@ -35,7 +42,7 @@ def process_log_file(file_path):
     malformed_logs = 0
 
     try:
-        with open(file_path , "r") as file:
+        with open_log_file(file_path) as file:
             for log in file:
 
                 log = log.strip()
@@ -180,8 +187,14 @@ def main():
     else:
         log_file = sys.argv[1]
         try:
+            start_time = time.perf_counter()
+
             report = process_log_file(log_file)
             print_report(report)
+
+            end_time = time.perf_counter()
+            total_time = end_time - start_time
+            print(f"\nExecution time: {total_time:.4f} seconds")
         except FileNotFoundError as e:
             print(f"Error : {e}")
             sys.exit(1)

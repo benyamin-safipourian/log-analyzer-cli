@@ -72,7 +72,7 @@ def process_log_file(file_path):
 
 
     except FileNotFoundError:
-        print("file not founded!")
+        raise FileNotFoundError(f"File not found: {file_path}")
 
 
 
@@ -103,7 +103,7 @@ def print_report(report):
     print("-" * 40)
 
     hours = report["hour_counts"]
-    
+
     if not hours:
         print("Time distribution: no valid hours found.")
         return
@@ -146,10 +146,17 @@ def print_report(report):
 def main():
     if len(sys.argv) < 2:
         print(f"python analyzer.py <path_log_file>")
+        sys.exit(1)
     else:
         log_file = sys.argv[1]
-        report = process_log_file(log_file)
-        print_report(report)
+        try:
+            report = process_log_file(log_file)
+            print_report(report)
+        except FileNotFoundError as e:
+            print(f"Error : {e}")
+            sys.exit(1)
+
+
 
 
 

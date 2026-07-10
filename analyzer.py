@@ -4,6 +4,7 @@ from collections import Counter
 import time
 import gzip
 import argparse
+import json
 
 # log_pattern = r'(?P<ip>\S+) - - \[(?P<time>.*?)\] "(?P<method>\S+) (?P<path>\S+) \S+" (?P<status>\d+) \d+'
 
@@ -209,6 +210,41 @@ def print_report(report , top_n ):
         )
         
 
+def print_json_report(report , top_n):
+
+
+    if report["total_requests"] > 0:
+        error_rate = (report["error_count"] / report["total_requests"]) * 100
+    else:
+        error_rate = 0
+
+    threshold = 20
+    suspicious_ips = [
+        {"ip": ip ,  "count" : count}
+        for ip, count in sorted(report["suspicious_login_failures"].items() , key=lambda item : item[1], reverse=True)
+        if count >= threshold
+    ]
+
+    json_data = {
+        "summary" : {
+            "total_requests" : report["total_requests"],
+            "Unique_IPs" : len(report["unique_ips"]),
+            "Malformed_logs" : report["malformed_logs"],
+            "error_count" : report["error_count"],
+            "error_rate" : round(error_rate, 2)
+        },
+        "top_endpoints" : [
+            {"path" : path , "count" : count}
+            for path , count in report["endpoint_counts"].most_common(top_n)
+        ],
+        "suspicion_activity" : {
+            "threshold" : threshold,
+            "ips" : suspicious_ips
+        }
+    }
+    print(json.dumps(json_data, indent=2, ensure_ascii=False))
+
+
 # Parse command-line arguments:
 def parse_args():
 
@@ -217,8 +253,10 @@ def parse_args():
     parser.add_argument("--top" , type=int, default=10)
     parser.add_argument("--start-hour" , type=int)
     parser.add_argument("--end-hour" , type=int)
+    parser.add_argument("--json" , action="store_true")
 
     return parser.parse_args()
+
 
 
 def main():
@@ -245,13 +283,17 @@ def main():
 
     try:
         start_time = time.perf_counter()
-
         report = process_log_file(args.log_file, start_hour=args.start_hour, end_hour=args.end_hour)
-        print_report(report , args.top)
 
-        end_time = time.perf_counter()
-        total_time = end_time - start_time
-        print(f"\nExecution time: {total_time:.4f} seconds")
+        if args.json:
+            print_json_report(report , args.top)
+        else:
+
+            print_report(report , args.top)
+
+            end_time = time.perf_counter()
+            total_time = end_time - start_time
+            print(f"\nExecution time: {total_time:.4f} seconds")
 
 
     except FileNotFoundError:

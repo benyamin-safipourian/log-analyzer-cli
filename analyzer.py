@@ -41,56 +41,45 @@ def process_log_file(file_path):
     total_requests = 0
     malformed_logs = 0
 
-    try:
-        with open_log_file(file_path) as file:
-            for log in file:
+    with open_log_file(file_path) as file:
+        for log in file:
+            log = log.strip()
+            if not log:
+                continue
 
-                log = log.strip()
-                if not log:
-                    continue
+            result = parse_log_line(log)
 
-                result = parse_log_line(log)
+            if result:
+                endpoint_counts[result["path"]] += 1
+                unique_ips.add(result["ip"])
+                total_requests += 1
 
-                if result:
+                status_code = int(result["status"])
+                if 400 <= status_code < 600:
+                    error_count += 1
 
-                    endpoint_counts[result["path"]] += 1
-                    unique_ips.add(result["ip"])
-                    total_requests += 1
+                if (
+                    status_code == 401
+                    and "login" in result["path"].lower()
+                    and result["method"] == "POST"
+                ):
+                    suspicious_login_failures[result["ip"]] += 1
 
-                    status_code = int(result["status"])
-                    if 400 <= status_code < 600:
-                        error_count += 1
+                hour = extract_hour(result["time"])
+                if hour is not None:
+                    hour_counts[hour] += 1
+            else:
+                malformed_logs += 1
 
-                    if (
-                        status_code == 401 
-                        and "login" in result["path"].lower()
-                        and result["method"] == "POST"
-                    ):
-                        suspicious_login_failures[result["ip"]] += 1
-
-                    hour = extract_hour(result["time"])
-                    if hour is not None:
-                        hour_counts[hour] += 1
-
-                else:
-                    malformed_logs += 1
-        
-        return {
-            "total_requests": total_requests,
-            "malformed_logs": malformed_logs,
-            "unique_ips": unique_ips,
-            "endpoint_counts": endpoint_counts,
-            "error_count": error_count,
-            "hour_counts" : dict(sorted(hour_counts.items())),
-            "suspicious_login_failures": suspicious_login_failures
-        }
-
-
-
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-
+    return {
+        "total_requests": total_requests,
+        "malformed_logs": malformed_logs,
+        "unique_ips": unique_ips,
+        "endpoint_counts": endpoint_counts,
+        "error_count": error_count,
+        "hour_counts": dict(sorted(hour_counts.items())),
+        "suspicious_login_failures": suspicious_login_failures,
+    }
 
 
 def print_report(report):
@@ -195,8 +184,22 @@ def main():
             end_time = time.perf_counter()
             total_time = end_time - start_time
             print(f"\nExecution time: {total_time:.4f} seconds")
-        except FileNotFoundError as e:
-            print(f"Error : {e}")
+
+
+        except FileNotFoundError:
+            print(f"Error: file not found: {log_file}")
+            sys.exit(1)
+
+        except gzip.BadGzipFile:
+            print(f"Error: invalid or corrupted gzip file: {log_file}")
+            sys.exit(1)
+
+        except UnicodeDecodeError:
+            print(f"Error: could not decode file as UTF-8: {log_file}")
+            sys.exit(1)
+
+        except OSError as e:
+            print(f"Error: failed to read file '{log_file}': {e}")
             sys.exit(1)
 
 
